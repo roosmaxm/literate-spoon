@@ -1,45 +1,52 @@
+import os, psycopg
+from psycopg.rows import dict_row
 from flask import Flask, request
-from flask_cors import CORS 
+from flask_cors import CORS
+from dotenv import load_dotenv
 
-PORT = 8300
+load_dotenv()
+
+PORT=8300 
+
+db_url = os.environ.get("DB_URL")
+print(db_url)
+
+conn = psycopg.connect(db_url, autocommit=True, row_factory=dict_row)
 
 app = Flask(__name__)
-CORS(app)  # Tillåt cross-origin requests
+CORS(app) # Tillåt cross-origin requests
 
-@app.route("/", methods=['GET', 'POST'])
-def hello():
-    user_ip = request.remote_addr
-    return {
-        "ip": user_ip,
-    'method': request.method
-    }
+rooms = [
+    { 'number': 101, 'type': "single" },
+    { 'number': 202, 'type': "double" },
+    { 'number': 303, 'type': "suite" }
+]
 
-@app.route("/test", methods=['GET', 'POST'])
-def test():{
-    'msg': "TESTING!",
-    "method": request.method
-}
+@app.route("/test", )
+def dbtest():
+     with conn.cursor() as cur:
+        cur.execute("SELECT * from people")
+        rows = cur.fetchall()
+        return rows
+    
 
-@app.route("/test/<int:id>", methods=['GET', 'PUT', 'PATCH', 'DELETE'])
-def testId(id):
-    if request.method == 'GET':
-       return{
-        'msg': f"Här får du id: {id}",
-        'method': request.method
-    }
-
-    if request.methdod == 'PUT':
-            return{
-        'msg': f"Du uppdaterar id: {id}",
-        'method': request.method
+@app.route("/rooms", methods=['GET', 'POST'])
+def rooms_endoint():
+    if request.method == 'POST':
+        request_body = request.get_json()
+        print(request_body)
+        rooms.append(request_body)
+        return { 
+            'msg': f"Du har skapat ett nytt rum, id: {len(rooms)-1}!"
         }
+    else:
+        return rooms
 
-    if request.methdod == 'DELETE':
-            return{
-        'msg': f"Du har raderat: {id}",
-        'method': request.method
-        }
-
+@app.route("/rooms/<int:id>", methods=['GET', 'PUT', 'PATCH', 'DELETE'] )
+def one_room_endpoint(id):
+        if request.method == 'GET':
+            return rooms[id]
+        
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=PORT, debug=True, ssl_context=(
