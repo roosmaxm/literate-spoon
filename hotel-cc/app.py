@@ -13,7 +13,7 @@ PORT=8300
 db_url = os.environ.get("DB_URL")
 print(os.environ.get("FOO"))
 
-conn = psycopg.connect(db_url, row_factory=dict_row)
+conn = psycopg.connect(db_url, autocommit=True, row_factory=dict_row)
 
 app = Flask(__name__)
 CORS(app) # Tillåt cross-origin requests
@@ -28,6 +28,24 @@ roomsTEMP = [
 def info():
     #return "<h1>Hello, Flask!</h1>"
     return "Hotel API, endpoints /rooms, /bookings"
+
+
+@app.route("/guests", methods=['GET'])
+def guests_endoint():
+    with conn.cursor() as cur:
+        cur.execute("""SELECT 
+                            hotel_guest.*, 
+                            (
+                                SELECT COUNT(*) 
+                                FROM hotel_booking 
+                                WHERE hotel_booking.guest_id = hotel_guest.id
+                            ) AS previous_visits 
+                        FROM 
+                            hotel_guest 
+                        ORDER BY 
+                            hotel_guest.firstname""")
+        return cur.fetchall()
+
 
 
 @app.route("/rooms", methods=['GET', 'POST'])
@@ -59,14 +77,47 @@ def one_room_endpoint(id):
         
 @app.route("/bookings", methods=['GET', 'POST'])
 def bookings():
+    if request.method == 'GET':
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT 
+                    hotel_booking.datefrom, 
+                    hotel_booking.room_id, 
+                    hotel_booking.guest_id, 
+                    hotel_guest.firstname AS guest_name, 
+                    hotel_room.room_number
+                FROM 
+                    hotel_booking
+                INNER JOIN 
+                    hotel_guest ON hotel_booking.guest_id = hotel_guest.id
+                INNER JOIN 
+                    hotel_room ON hotel_booking.room_id = hotel_room.id
+                ORDER BY 
+                    hotel_booking.datefrom
+            """)
+            return cur.fetchall()
+        
     if request.method == 'POST':
-        request_body = request.get_json()
-        print(request_body)
-        # Skapa rad i hotel_booking med sql INSERT INTO...
-        return { 
-            "msg": "APIN svarar!", 
-            "request_body": request_body 
-        }
+        body = request.get_json()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO hotel_booking (
+                    room_id, 
+                    guest_id,
+                    datefrom
+                ) VALUES (
+                    %s, 
+                    %s, 
+                    %s
+                ) RETURNING id""", [ 
+                body['room'], 
+                body['guest'], 
+                body['datefrom'] 
+            ])
+            result = cur.fetchone()
+    
+        return { "msg": "Du har bokat ett rum!", "result": result }
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=PORT, debug=True, ssl_context=(
