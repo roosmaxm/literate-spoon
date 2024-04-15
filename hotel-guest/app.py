@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-PORT=8803 # Freddes port ANVÄND DIN EGEN!
+PORT=8300
 
 db_url = os.environ.get("DB_URL")
 print(os.environ.get("FOO"))
